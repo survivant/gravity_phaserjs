@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en" xml:lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+  <title>Gravity game prototype</title>
+  <script src="js/phaser.min.js" type="text/javascript"></script>
+  <script src="js/pv_util.js" type="text/javascript"></script>
+  <style>
+    body{
+      background: black;
+    }
+  </style>
+</head>
+<body>
+
+  <script type="text/javascript">
+      // we're using the CANVAS rendering to see debugging values provided by phaser
+      var game = new Phaser.Game(320, 480, Phaser.CANVAS, 'phaser-example', { preload: preload, create: create, update: update, render: render });
+
+      var cursors = null;
+      var map = null;;
+      var map_layer = null;
+      var player = null;
+      var move_to_x = null;
+      var move_direction = 0;
+      var clicked_mouse = false;
+      var diamonds_group = null;
+
+      // preloading assets
+      function preload() {
+        game.load.tilemap('current_level', 'assets/maps/0001.json', null, Phaser.Tilemap.TILED_JSON);
+        game.load.image('tiles', 'assets/tiles/tiles.png');
+        game.load.image('player', 'assets/sprites/player.png');
+        game.load.image('gravity_button', 'assets/sprites/gravity_button.png');
+        game.load.image('diamond', 'assets/sprites/diamond.png');
+      }
+
+      function create() {
+      // setting global gravity to 100
+      game.physics.gravity.y = 100;
+
+      cursors = game.input.keyboard.createCursorKeys();
+
+      // adding the tilemap created with Tiled
+      map = game.add.tilemap('current_level');
+      map.addTilesetImage('tiles', 'tiles');
+      // the gray tiles shall be responsible for collisions, check the tiles.png, the first one is the gray one
+      map.setCollisionBetween(0, 1);
+      // loading the layer from the tilemap, the layer name got defines in the Tiled editor
+      map_layer = map.createLayer('Level');
+      map_layer.resizeWorld();
+      map_layer.debug = true; // show the bounding boxes for collisions
+
+      // creating and adding the player sprite
+      player = game.add.sprite(50,400,"player");
+      player.body.collideWorldBounds = true; // don't move out of the screen
+      player.body.immovable = false; // no bouncing or other fancy physics stuff for the player
+      player.body.linearDamping = 0;
+
+      // loading the collectibles from the tilemap
+      var collectibles = load_objects_from_tiled_map("assets/maps/0001.json","Collectibles");
+      diamonds_group = game.add.group();
+      for(var i = 0; i < collectibles.length; i++){
+        var t = game.add.sprite(collectibles[i]['x'],collectibles[i]['y'], 'diamond');
+        t.body.immovable = true;
+        t.body.allowGravity = false;
+        t.body.gravity = 100;
+        diamonds_group.add(t);
+      }
+
+      // the button to change the gravity
+      button = game.add.button(250,400, 'gravity_button', action_flip_gravity, this, 2, 1, 0);
+      button.body.allowGravity = false;
+    }
+
+    // update call for phaser.io
+    function update(){
+      // update collision checks for the player an the map every update cycle
+      game.physics.collide(player, map_layer,collide_player_with_world);
+      game.physics.collide(diamonds_group, map_layer);
+      game.physics.collide(player,diamonds_group,collide_player_with_diamond);
+      
+
+      // let's move the player to a direction
+      if (game.input.mousePointer.isDown && move_to_x == null){
+        if(game.input.x < 250 || game.input.y < 400){ // we won't move if the user just wants to press the gravity button
+
+          move_to_x = game.input.x;
+          if(move_to_x < player.x){
+            move_direction = -1; // moving left
+            player.body.velocity.setTo(-100,0);
+          }else{
+            move_direction = 1; // moving right
+            player.body.velocity.setTo(100,0);
+          }
+        }   
+      } // end of if
+
+
+
+      // stopping the movement, when we reached the point
+      if(move_to_x && move_direction == -1){
+        if(player.x <= move_to_x){
+          move_to_x = null;
+          move_direction = 0;
+          player.body.velocity.setTo(0,0);
+        }
+      }else if(move_to_x && move_direction == 1){
+        if(player.x >= move_to_x){
+          move_to_x = null;
+          move_direction = 0;
+          player.body.velocity.setTo(0,0);
+        }
+      } // end of if
+    } 
+
+    function collide_player_with_diamond(player,diamond){
+      diamond.kill(); // simply kill the diamond
+      move_to_x = null;
+      move_direction = 0;
+    }
+
+    // check collision of the player against the tilemap
+    function collide_player_with_world(player,map_layer){
+      if(typeof(player) == "undefined" || typeof(map_layer) == "undefined"){
+        return
+      }
+
+      if(!player.body.blocked.up && game.physics.gravity.y < 0){
+        move_to_x = null;
+        move_direction = 0;
+        player.body.velocity.setTo(0,0);
+      }
+
+      if(!player.body.blocked.down && game.physics.gravity.y > 0){
+
+        move_to_x = null;
+        move_direction = 0;
+        player.body.velocity.setTo(0,0);
+      }
+
+    }
+
+    function render(){
+      game.debug.renderPhysicsBody(player.body);
+    }
+
+    function action_flip_gravity(){
+      // just flip the gravity
+      game.physics.gravity.y *= -1;
+      move_to_x = null;
+      move_direction = 0;
+    }
+
+    
+  </script>
+</body>
+</html>
